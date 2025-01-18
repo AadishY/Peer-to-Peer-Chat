@@ -1,11 +1,11 @@
-import os
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
-import socket
+import os
 
 app = FastAPI()
 
-clients = []
+# In-memory message queue (could use database in real app)
+messages = []
 
 # HTML content for the website
 html_content = """
@@ -21,34 +21,22 @@ html_content = """
     <h2 id="ws-url">Loading WebSocket URL...</h2>
     <div id="logs"></div>
     <script>
-        // Fetch the WebSocket URL from the server
-        fetch("/ws-url")
-            .then(response => response.json())
-            .then(data => {
-                document.getElementById("ws-url").textContent = `WebSocket URL: ${data["WebSocket URL"]}`;
-                connectWebSocket(data["WebSocket URL"]);
-            })
-            .catch(error => {
-                document.getElementById("ws-url").textContent = "Error fetching WebSocket URL.";
-                console.error(error);
-            });
-
-        function connectWebSocket(url) {
-            const logs = document.getElementById("logs");
-            const ws = new WebSocket(url);
-
-            ws.onmessage = (event) => {
-                const message = document.createElement('div');
-                message.textContent = event.data;
-                logs.appendChild(message);
-            };
-
-            ws.onclose = () => {
-                const message = document.createElement('div');
-                message.textContent = "Connection closed.";
-                logs.appendChild(message);
-            };
-        }
+        // Fetch the chat messages every second (long polling)
+        setInterval(() => {
+            fetch("/polling")
+                .then(response => response.json())
+                .then(data => {
+                    const logs = document.getElementById("logs");
+                    data.messages.forEach(msg => {
+                        const message = document.createElement('div');
+                        message.textContent = msg;
+                        logs.appendChild(message);
+                    });
+                })
+                .catch(error => {
+                    console.error("Error fetching messages:", error);
+                });
+        }, 1000);  // Polling every 1 second
     </script>
 </body>
 </html>
@@ -59,23 +47,13 @@ def serve_html():
     # Return the HTML content as the homepage
     return html_content
 
-@app.get("/ws-url")
-def get_ws_url():
-    # Use Vercel URL from environment variable or fallback to localhost for testing
-    host = "wss://" + os.environ.get("VERCEL_URL", "localhost:8000")  # Use Vercel URL or localhost for testing
-    ws_url = f"{host}/ws"
-    return {"WebSocket URL": ws_url}
+@app.get("/polling")
+def polling():
+    # Return the latest chat messages (simulating long polling)
+    return {"messages": messages}
 
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    await websocket.accept()
-    clients.append(websocket)
-    try:
-        while True:
-            data = await websocket.receive_text()
-            # Broadcast the received message to all clients
-            for client in clients:
-                if client != websocket:
-                    await client.send_text(data)
-    except WebSocketDisconnect:
-        clients.remove(websocket)
+@app.post("/send_message")
+def send_message(message: str):
+    # Store the new message
+    messages.append(message)
+    return {"status": "Message received"}
