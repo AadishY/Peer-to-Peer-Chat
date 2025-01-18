@@ -1,8 +1,7 @@
+import os
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 import socket
-import asyncio
-from typing import List
 
 app = FastAPI()
 
@@ -23,7 +22,7 @@ html_content = """
     <div id="logs"></div>
     <script>
         // Fetch the WebSocket URL from the server
-        fetch("/")
+        fetch("/ws-url")
             .then(response => response.json())
             .then(data => {
                 document.getElementById("ws-url").textContent = `WebSocket URL: ${data["WebSocket URL"]}`;
@@ -62,8 +61,9 @@ def serve_html():
 
 @app.get("/ws-url")
 def get_ws_url():
-    host = socket.gethostbyname(socket.gethostname())
-    ws_url = f"ws://{host}:8000/ws"  # Adjust the port if needed
+    # Use Vercel URL from environment variable or fallback to localhost for testing
+    host = "wss://" + os.environ.get("VERCEL_URL", "localhost:8000")  # Use Vercel URL or localhost for testing
+    ws_url = f"{host}/ws"
     return {"WebSocket URL": ws_url}
 
 @app.websocket("/ws")
