@@ -1,5 +1,2 @@
-socket
-threading
-queue
-os
-random
+fastapi
+uvicorn
